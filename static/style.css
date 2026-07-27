@@ -1,0 +1,127 @@
+body {
+    font-family: 'Inter', sans-serif;
+    background: #0f172a;
+    margin: 0;
+    color: white;
+}
+
+/* Container */
+.container {
+    max-width: 900px;
+    margin: 40px auto;
+    padding: 10px;
+}
+
+/* Header */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+}
+
+.logo {
+    font-size: 22px;
+    font-weight: 600;
+    color: #6366f1;
+}
+
+/* Cards */
+.card {
+    background: #1e293b;
+    padding: 25px;
+    border-radius: 14px;
+    margin-bottom: 20px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+}
+
+/* Inputs */
+input {
+    padding: 12px;
+    margin: 5px 0;
+    border-radius: 8px;
+    border: none;
+    width: 100%;
+    background: #0f172a;
+    color: white;
+}
+
+input::placeholder {
+    color: #94a3b8;
+}
+
+/* Row layout */
+.subject-row {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+}
+.subject-row input {
+    flex: 1;
+}
+
+/* Buttons */
+button {
+    background: #6366f1;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 10px;
+    color: white;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+button:hover {
+    background: #4f46e5;
+    transform: scale(1.05);
+}
+
+/* Subject cards */
+.subject {
+    display: block;
+    background: #1e40af;
+    padding: 12px;
+    border-radius: 10px;
+    margin: 8px 0;
+}
+
+/* Day spacing */
+.day {
+    margin-top: 15px;
+}
+
+/* Titles */
+h2 {
+    margin-bottom: 15px;
+    color: #38bdf8;
+}
+
+/* Responsive (mobile) */
+@media (max-width: 600px) {
+
+    .subject-row {
+        flex-direction: column;
+    }
+
+    .subject-row input {
+        width: 100%;
+    }
+
+    .container {
+        margin: 15px;
+    }
+
+    .card {
+        width: 100%;
+        padding: 15px;
+    }
+
+}
+
+body {
+    overflow-x: hidden;
+}
+.card {
+    width: 100%;
+    box-sizing: border-box;
+}

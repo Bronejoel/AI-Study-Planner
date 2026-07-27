@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>StudyAI</title>
+
+    <!-- Mobile responsiveness -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+
+    <!-- Link external CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+</head>
+
+<body>
+
+<div class="container">
+
+    <!-- Header -->
+    <div class="header">
+        <div class="logo">📘 StudyAI</div>
+        <div>Dashboard</div>
+    </div>
+
+    <!-- Input Card -->
+    <div class="card">
+
+        <h2>Add Subjects</h2>
+
+        <form method="POST">
+
+            <div id="subjects">
+                <div class="subject-row">
+                    <input name="name" placeholder="Subject Name">
+                    <input name="difficulty" placeholder="Difficulty (1-5)">
+                    <input name="days" placeholder="Days Left">
+                </div>
+            </div>
+
+            <button type="button" onclick="addSubject()">+ Add Subject</button>
+
+            <br><br>
+
+            <input name="hours" placeholder="Study hours per day">
+
+            <br><br>
+
+            <button type="submit">Generate Plan</button>
+
+        </form>
+
+    </div>
+
+    <!-- Output -->
+    {% if plan %}
+    <div class="card">
+
+        <h2>Weekly Study Plan</h2>
+
+        {% for day in plan %}
+            <div class="day">
+                <h3>Day {{ day.day }}</h3>
+
+                {% for s in day.plan %}
+                    <div class="subject">
+                        {{ s.name }} → {{ s.hours }}h
+                    </div>
+                {% endfor %}
+            </div>
+        {% endfor %}
+
+    </div>
+    {% endif %}
+
+</div>
+
+<!-- JS -->
+<script>
+function addSubject() {
+    const div = document.createElement("div");
+    div.className = "subject-row";
+
+    div.innerHTML = `
+        <input name="name" placeholder="Subject Name">
+        <input name="difficulty" placeholder="Difficulty (1-5)">
+        <input name="days" placeholder="Days Left">
+    `;
+
+    document.getElementById("subjects").appendChild(div);
+}
+</script>
+
+</body>
+</html>
