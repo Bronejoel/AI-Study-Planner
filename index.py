@@ -1,30 +1,17 @@
 from flask import Flask, request, render_template
 from planner import generate_plan
+from validation import parse_plan_form
 
 app = Flask(__name__)
 
 @app.route("/", methods=["GET", "POST"])
 def home():
-
     if request.method == "POST":
-
-        subjects = []
-
-        names = request.form.getlist("name")
-        difficulties = request.form.getlist("difficulty")
-        days = request.form.getlist("days")
-
-        for i in range(len(names)):
-            if names[i] and difficulties[i] and days[i]:
-                subjects.append({
-                    "name": names[i],
-                    "difficulty": int(difficulties[i]),
-                    "days_left": int(days[i])
-                })
-
-        hours = int(request.form["hours"])
-
-        plan = generate_plan(subjects, hours)
+        try:
+            subjects, hours = parse_plan_form(request.form)
+            plan = generate_plan(subjects, hours)
+        except ValueError as error:
+            return render_template("index.html", error=str(error)), 400
 
         return render_template("index.html", plan=plan)
 
@@ -32,4 +19,4 @@ def home():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=False)

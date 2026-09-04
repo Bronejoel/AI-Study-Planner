@@ -50,6 +50,15 @@ input::placeholder {
     color: #94a3b8;
 }
 
+.error {
+    background: #7f1d1d;
+    border: 1px solid #f87171;
+    border-radius: 8px;
+    color: #fee2e2;
+    margin-bottom: 15px;
+    padding: 12px;
+}
+
 /* Row layout */
 .subject-row {
     display: flex;

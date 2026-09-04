@@ -30,13 +30,17 @@
 
         <h2>Add Subjects</h2>
 
+        {% if error %}
+            <div class="error" role="alert">{{ error }}</div>
+        {% endif %}
+
         <form method="POST">
 
             <div id="subjects">
                 <div class="subject-row">
-                    <input name="name" placeholder="Subject Name">
-                    <input name="difficulty" placeholder="Difficulty (1-5)">
-                    <input name="days" placeholder="Days Left">
+                    <input name="name" placeholder="Subject Name" aria-label="Subject name">
+                    <input name="difficulty" type="number" min="1" max="5" step="1" placeholder="Difficulty (1-5)" aria-label="Difficulty">
+                    <input name="days" type="number" min="1" step="1" placeholder="Days Left" aria-label="Days left">
                 </div>
             </div>
 
@@ -44,7 +48,7 @@
 
             <br><br>
 
-            <input name="hours" placeholder="Study hours per day">
+            <input name="hours" type="number" min="0.25" step="0.25" placeholder="Study hours per day" aria-label="Study hours per day" required>
 
             <br><br>
 
@@ -84,9 +88,9 @@ function addSubject() {
     div.className = "subject-row";
 
     div.innerHTML = `
-        <input name="name" placeholder="Subject Name">
-        <input name="difficulty" placeholder="Difficulty (1-5)">
-        <input name="days" placeholder="Days Left">
+        <input name="name" placeholder="Subject Name" aria-label="Subject name">
+        <input name="difficulty" type="number" min="1" max="5" step="1" placeholder="Difficulty (1-5)" aria-label="Difficulty">
+        <input name="days" type="number" min="1" step="1" placeholder="Days Left" aria-label="Days left">
     `;
 
     document.getElementById("subjects").appendChild(div);
