@@ -1,7 +1,8 @@
 # StudyAI
 
-StudyAI is a Flask web application that creates a seven-day study plan from a
-student's subjects, difficulty ratings, deadlines, and available daily hours.
+StudyAI is a Flask web application that creates a deadline-aware study plan from
+a student's subjects, difficulty ratings, remaining workload, and availability
+on specific calendar dates.
 
 This is the reliable scheduling-engine stage of a larger adaptive AI study
 coach. The current planner is a deterministic baseline; it does not yet use a
@@ -9,22 +10,29 @@ machine-learning model or an LLM.
 
 ## How the current planner works
 
-For each active subject, the planner calculates:
+For each unfinished subject that has not passed its deadline, the planner
+calculates:
 
 ```text
-priority = difficulty / remaining days
+required daily minutes = remaining minutes / remaining study days
+priority = difficulty * required daily minutes
 ```
 
-A difficult subject with a close deadline therefore receives more time than an
-easy subject with a distant deadline. Each day's available hours are divided in
-proportion to these priority scores.
+A difficult subject with substantial remaining work and a close deadline
+therefore receives a study block before a less urgent subject. Priorities are
+recalculated as work is scheduled.
 
 The planner:
 
 - validates all inputs before calculating;
-- allocates all available daily time without losing time to rounding;
+- supports different availability on each calendar date;
+- allows availability dates beyond the initial seven suggested dates;
+- creates 30-minute sessions with a shorter final session when necessary;
 - stops scheduling a subject after its deadline;
-- supports decimal daily hours;
+- stops scheduling a subject when its workload is complete;
+- groups repeated sessions into readable daily summaries;
+- reports work that could not be scheduled;
+- preserves submitted form values after success or validation errors;
 - does not modify the input data; and
 - returns friendly web-form errors for invalid data.
 
@@ -48,7 +56,7 @@ Start the web application:
 python index.py
 ```
 
-Open <http://127.0.0.1:5000> in a browser.
+Open <http://127.0.0.1:5001> in a browser.
 
 ## Run the tests
 
@@ -56,8 +64,9 @@ Open <http://127.0.0.1:5000> in a browser.
 python -m pytest
 ```
 
-The test suite checks priority ordering, deadlines, rounding, decimal hours,
-input immutability, invalid planner data, and complete Flask form requests.
+The test suite checks date and form parsing, priority ordering, deadline rules,
+workload updates, session allocation, input immutability, dynamic availability,
+grouped output, unfinished-work warnings, and complete Flask requests.
 
 ## Project structure
 
@@ -73,11 +82,11 @@ static/style.css      Page styling
 
 ## Current limitations
 
-- Availability is the same every day.
-- The output uses day numbers instead of calendar dates.
-- It allocates time by subject rather than creating practical study sessions.
+- Sessions use a fixed default size of 30 minutes.
+- Availability records total daily hours rather than specific clock times.
+- Plans are not saved between requests because there is no database yet.
 - It does not track completed work or quiz performance.
 - It does not yet answer questions from uploaded notes.
 
-The next milestone is a realistic scheduling model with dates, topic-level
-workload, daily availability, and study blocks.
+The next milestone is persistent progress tracking with a database, followed by
+note retrieval and grounded AI assistance.

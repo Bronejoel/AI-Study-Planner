@@ -1,101 +1,160 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
-    <title>StudyAI</title>
-
-    <!-- Mobile responsiveness -->
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <!-- Font -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
-
-    <!-- Link external CSS -->
+    <title>StudyAI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-
 </head>
 
 <body>
-
 <div class="container">
-
-    <!-- Header -->
     <div class="header">
-        <div class="logo">📘 StudyAI</div>
-        <div>Dashboard</div>
+        <div class="logo"><span class="status-light"></span>StudyAI</div>
+        <div class="header-status">Smart study planner</div>
     </div>
 
-    <!-- Input Card -->
     <div class="card">
-
-        <h2>Add Subjects</h2>
+        <p class="eyebrow">Plan smarter. Study with focus.</p>
+        <h2 class="page-title">Create Your Study Plan</h2>
 
         {% if error %}
             <div class="error" role="alert">{{ error }}</div>
         {% endif %}
 
         <form method="POST">
-
-            <div id="subjects">
-                <div class="subject-row">
-                    <input name="name" placeholder="Subject Name" aria-label="Subject name">
-                    <input name="difficulty" type="number" min="1" max="5" step="1" placeholder="Difficulty (1-5)" aria-label="Difficulty">
-                    <input name="days" type="number" min="1" step="1" placeholder="Days Left" aria-label="Days left">
-                </div>
+            <div class="section-heading">
+                <h3>Subjects</h3>
+                <button type="button" class="secondary-button" onclick="addSubject()">+ Add Subject</button>
             </div>
 
-            <button type="button" onclick="addSubject()">+ Add Subject</button>
-
-            <br><br>
-
-            <input name="hours" type="number" min="0.25" step="0.25" placeholder="Study hours per day" aria-label="Study hours per day" required>
-
-            <br><br>
-
-            <button type="submit">Generate Plan</button>
-
-        </form>
-
-    </div>
-
-    <!-- Output -->
-    {% if plan %}
-    <div class="card">
-
-        <h2>Weekly Study Plan</h2>
-
-        {% for day in plan %}
-            <div class="day">
-                <h3>Day {{ day.day }}</h3>
-
-                {% for s in day.plan %}
-                    <div class="subject">
-                        {{ s.name }} → {{ s.hours }}h
+            <div id="subjects" class="subject-list">
+                {% for row in subject_rows %}
+                    <div class="subject-row">
+                        <label class="field"><span>Subject</span><input name="name" value="{{ row.name }}" placeholder="e.g. Mathematics" aria-label="Subject name"></label>
+                        <label class="field"><span>Difficulty</span><input name="difficulty" value="{{ row.difficulty }}" type="number" min="1" max="5" step="1" placeholder="1–5" aria-label="Difficulty"></label>
+                        <label class="field"><span>Deadline</span><input name="deadline" value="{{ row.deadline }}" type="date" min="{{ today.isoformat() }}" aria-label="Deadline"></label>
+                        <label class="field"><span>Work left (hours)</span><input name="workload" value="{{ row.workload }}" type="number" min="0.25" step="0.25" placeholder="e.g. 3.5" aria-label="Workload hours"></label>
+                        <button type="button" class="remove-button" onclick="removeRow(this)" aria-label="Remove subject">Remove</button>
                     </div>
                 {% endfor %}
             </div>
-        {% endfor %}
 
+            <div class="section-heading availability-heading">
+                <h3>Daily Availability</h3>
+                <button type="button" class="secondary-button" onclick="addAvailability()">+ Add Date</button>
+            </div>
+
+            <p class="helper-text">Enter the date you can study and the total hours available on that date.</p>
+
+            <div id="availability" class="availability-list">
+                {% for row in availability_rows %}
+                    <div class="availability-row">
+                        <label class="field"><span>Study date</span><input name="availability_date" value="{{ row.date }}" type="date" min="{{ today.isoformat() }}" aria-label="Study date"></label>
+                        <label class="field"><span>Available hours</span><input name="availability_hours" value="{{ row.hours }}" type="number" min="0" step="0.25" placeholder="e.g. 2.5" aria-label="Available hours"></label>
+                        <button type="button" class="remove-button" onclick="removeRow(this)" aria-label="Remove availability date">Remove</button>
+                    </div>
+                {% endfor %}
+            </div>
+
+            <button type="submit" class="submit-button">Generate Plan</button>
+        </form>
     </div>
-    {% endif %}
 
+    {% if plan %}
+        <div class="card" id="study-plan">
+            <h2>Your Study Plan</h2>
+
+            {% for day in plan.days %}
+                <div class="day">
+                    <h3>{{ day.date.strftime("%A, %d %B %Y") }}</h3>
+
+                    {% if day.session_summary %}
+                        {% for summary in day.session_summary %}
+                            <div class="subject">
+                                <span>{{ summary.subject }}</span>
+                                <span>
+                                    {{ summary.total_minutes | duration }}
+                                </span>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="empty-day">No study sessions scheduled.</p>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+
+        {% if plan.unfinished_subjects %}
+            <div class="card warning">
+                <h2>Unfinished Work</h2>
+                <p>There was not enough available time to schedule all the required work.</p>
+
+                {% for subject in plan.unfinished_subjects %}
+                    <div class="unfinished-subject">
+                        {{ subject.name }}: {{ subject.remaining_minutes }} minutes remaining
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endif %}
 </div>
 
-<!-- JS -->
+<template id="subject-row-template">
+    <div class="subject-row">
+        <label class="field"><span>Subject</span><input name="name" placeholder="e.g. Mathematics" aria-label="Subject name"></label>
+        <label class="field"><span>Difficulty</span><input name="difficulty" type="number" min="1" max="5" step="1" placeholder="1–5" aria-label="Difficulty"></label>
+        <label class="field"><span>Deadline</span><input name="deadline" type="date" min="{{ today.isoformat() }}" aria-label="Deadline"></label>
+        <label class="field"><span>Work left (hours)</span><input name="workload" type="number" min="0.25" step="0.25" placeholder="e.g. 3.5" aria-label="Workload hours"></label>
+        <button type="button" class="remove-button" onclick="removeRow(this)" aria-label="Remove subject">Remove</button>
+    </div>
+</template>
+
+<template id="availability-row-template">
+    <div class="availability-row">
+        <label class="field"><span>Study date</span><input name="availability_date" type="date" min="{{ today.isoformat() }}" aria-label="Study date"></label>
+        <label class="field"><span>Available hours</span><input name="availability_hours" type="number" min="0" step="0.25" placeholder="e.g. 2.5" aria-label="Available hours"></label>
+        <button type="button" class="remove-button" onclick="removeRow(this)" aria-label="Remove availability date">Remove</button>
+    </div>
+</template>
+
 <script>
+function appendTemplate(templateId, containerId) {
+    const template = document.getElementById(templateId);
+    const row = template.content.cloneNode(true);
+    document.getElementById(containerId).appendChild(row);
+}
+
 function addSubject() {
-    const div = document.createElement("div");
-    div.className = "subject-row";
+    appendTemplate("subject-row-template", "subjects");
+}
 
-    div.innerHTML = `
-        <input name="name" placeholder="Subject Name" aria-label="Subject name">
-        <input name="difficulty" type="number" min="1" max="5" step="1" placeholder="Difficulty (1-5)" aria-label="Difficulty">
-        <input name="days" type="number" min="1" step="1" placeholder="Days Left" aria-label="Days left">
-    `;
+function addAvailability() {
+    appendTemplate("availability-row-template", "availability");
+}
 
-    document.getElementById("subjects").appendChild(div);
+function removeRow(button) {
+    button.closest(".subject-row, .availability-row").remove();
 }
 </script>
 
+{% if plan %}
+<script>
+    window.addEventListener("DOMContentLoaded", function () {
+        const studyPlan = document.getElementById("study-plan");
+
+        if (studyPlan) {
+            studyPlan.scrollIntoView({
+                behavior: "smooth",
+                block: "start"
+            });
+        }
+    });
+</script>
+{% endif %}
 </body>
 </html>
