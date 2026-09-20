@@ -292,6 +292,8 @@ def schedule_subject_block(
         "subject": subject["name"],
         "minutes": scheduled_minutes,
     }
+    if "id" in subject:
+        session["subject_id"] = subject["id"]
 
     return session, updated_subject
 

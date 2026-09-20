@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>StudyAI — Study & progress</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+{% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">{% endmacro %}
+{% macro fields(values, editing=false) %}
+    <label class="field"><span>Subject</span><input name="name" value="{{ values.get('name', '') }}" required maxlength="200" placeholder="e.g. Python"></label>
+    <label class="field"><span>Difficulty (1–5)</span><input name="difficulty" type="number" min="1" max="5" step="1" value="{{ values.get('difficulty', '') }}" required></label>
+    <label class="field"><span>Deadline</span><input name="deadline" type="date" {% if not editing %}min="{{ today }}"{% endif %} value="{{ values.get('deadline', '') }}" required></label>
+    <label class="field"><span>Total workload (hours)</span><input name="workload" type="number" min="0.25" step="0.25" value="{{ values.get('workload', '') }}" required placeholder="e.g. 3.5"></label>
+{% endmacro %}
+<main class="container">
+    <header class="header"><div class="logo"><span class="status-light" aria-hidden="true"></span>StudyAI</div><nav aria-label="Page sections"><a href="#subjects">Subjects</a><a href="#availability-section">Availability</a><a href="#study-plan">Study plan</a></nav></header>
+    <div class="page-intro"><p class="eyebrow">Your study workspace</p><h1>Make time.<br>Make progress.</h1><p class="helper-text">Save your subjects, plan your week, and track the work you actually finish.</p></div>
+    {% for message in get_flashed_messages() %}<p class="notice" role="status">{{ message }}</p>{% endfor %}
+    {% if error %}<p class="error dashboard-error" role="alert">{{ error }}</p>{% endif %}
+    <div class="stats"><div><span>Subjects</span><strong>{{ subjects|length }}</strong></div><div><span>Study completed</span><strong>{{ completed_total|duration }}</strong></div><div><span>Work remaining</span><strong>{{ remaining_total|duration }}</strong></div></div>
+    <section class="card" id="subjects">
+        <h2>Subjects</h2>
+        <form action="{{ url_for('add_subject') }}" method="post">
+            {{ csrf() }}<input type="hidden" name="create_token" value="{{ session.create_token }}">
+            <div class="subject-row">{{ fields(form if not edit_id else {}) }}<button type="submit">Save subject</button></div>
+        </form>
+        {% if not subjects %}<p class="helper-text">No saved subjects yet. Add your first subject above.</p>{% endif %}
+        <div class="saved-subjects">
+        {% for subject in subjects %}
+            <article class="saved-subject">
+                <div class="section-heading"><div><h3>{{ subject.name }}</h3><p class="helper-text">Due {{ subject.deadline.strftime('%d %b %Y') }} · Difficulty {{ subject.difficulty }}{% if subject.deadline < today and subject.remaining_minutes %} · <span class="overdue">Overdue</span>{% endif %}</p></div><span class="duration-pill">{{ subject.remaining_minutes|duration }} remaining</span></div>
+                <progress value="{{ subject.completed_minutes }}" max="{{ subject.total_minutes }}" aria-label="Completed workload for {{ subject.name }}"></progress>
+                <p class="helper-text">{{ subject.completed_minutes|duration }} of {{ subject.total_minutes|duration }} completed · {{ subject.percent }}%</p>
+                <details {% if edit_id == subject.id %}open{% endif %}><summary>Edit subject</summary>
+                    <form action="{{ url_for('edit_subject', subject_id=subject.id) }}" method="post">
+                        {{ csrf() }}
+                        {% set values = form if edit_id == subject.id else {'name': subject.name, 'difficulty': subject.difficulty, 'deadline': subject.deadline.isoformat(), 'workload': subject.total_minutes / 60} %}
+                        <div class="subject-row">{{ fields(values, true) }}<button type="submit">Save changes</button></div>
+                        <p class="helper-text">Total workload includes completed study. Editing replaces pending plans, keeping completed progress.</p>
+                    </form>
+                    <form action="{{ url_for('remove_subject', subject_id=subject.id) }}" method="post" data-confirm="Delete this subject and all its study history? This cannot be undone.">{{ csrf() }}<button class="remove-button" type="submit">Delete subject &amp; history</button></form>
+                </details>
+            </article>
+        {% endfor %}
+        </div>
+    </section>
+    <section class="card" id="availability-section">
+        <div class="section-heading"><h2>Daily availability</h2><button class="secondary-button" type="button" id="add-date">+ Add Date</button></div>
+        <p class="helper-text">Total hours you can study on each date, including any study already completed that day. Save before generating.</p>
+        <form action="{{ url_for('availability') }}" method="post">{{ csrf() }}
+            <div id="availability" class="availability-list">
+            {% for row in availability_rows %}
+                <div class="availability-row"><label class="field"><span>Study date</span><input name="availability_date" type="date" min="{{ today }}" value="{{ row.date }}"></label><label class="field"><span>Available hours</span><input name="availability_hours" type="number" min="0" max="24" step="0.25" value="{{ row.hours }}"></label><button class="remove-button" type="button" data-remove>Remove date</button></div>
+            {% endfor %}
+            </div>
+            <button type="submit" class="submit-button">Save availability</button>
+        </form>
+    </section>
+    <section class="card" id="study-plan" tabindex="-1">
+        <div class="section-heading"><h2>Your Study Plan</h2><form action="{{ url_for('generate') }}" method="post">{{ csrf() }}<button type="submit">Generate Plan</button></form></div>
+        <p class="helper-text">Generating replaces pending work and keeps completed history. Your subjects and plan stay saved when you close the app.</p>
+        {% if needs_plan %}<p class="notice">Generate a plan to reflect your latest subjects, availability or undone progress.</p>{% endif %}
+        {% if not days %}<p class="helper-text">No saved sessions yet. Save a subject and availability, then generate your plan.</p>{% endif %}
+        {% for day, sessions in days.items() %}
+            <div class="day"><h3>{{ day.strftime('%A, %d %B %Y') }}</h3><div>
+            {% for entry in sessions %}
+                <article class="session-card">
+                    <div class="section-heading"><h3>{{ entry.name }}</h3><span class="duration-pill">{{ entry.minutes|duration }}</span></div>
+                    <p class="helper-text">{{ entry.completed_minutes|duration }} completed{% if entry.completed_minutes == entry.minutes %} · Completed ✓{% elif day < today %} · Past due — log actual study or regenerate{% endif %}</p>
+                    {% if day <= today %}
+                        {% if entry.completed_minutes < entry.minutes %}
+                            <form action="{{ url_for('complete', session_id=entry.id) }}" method="post">{{ csrf() }}<input type="hidden" name="completed_minutes" value="{{ entry.minutes }}"><button type="submit">Mark as completed</button></form>
+                            <details><summary>Record partial progress</summary><form class="partial-form" action="{{ url_for('complete', session_id=entry.id) }}" method="post">{{ csrf() }}<label class="field"><span>Total minutes completed in this entry</span><input name="completed_minutes" type="number" min="{{ entry.completed_minutes }}" max="{{ entry.minutes }}" step="1" value="{{ entry.completed_minutes }}" required></label><button type="submit" class="secondary-button">Save progress</button></form></details>
+                        {% endif %}
+                        {% if entry.completed_minutes %}<form action="{{ url_for('complete', session_id=entry.id) }}" method="post">{{ csrf() }}<input type="hidden" name="completed_minutes" value="0"><button type="submit" class="secondary-button">Undo completion</button></form>{% endif %}
+                    {% else %}<p class="helper-text">Available to complete on {{ day.strftime('%d %b') }}.</p>{% endif %}
+                </article>
+            {% endfor %}
+            </div></div>
+        {% endfor %}
+        {% set unfinished = subjects|selectattr('unscheduled_minutes')|list %}
+        {% if unfinished %}<div class="warning-panel"><h3>Unscheduled work</h3><p class="helper-text">These minutes have no pending session today or later. Add availability or adjust deadlines, then regenerate.</p>{% for subject in unfinished %}<p>{{ subject.name }}: {{ subject.unscheduled_minutes|duration }}</p>{% endfor %}</div>{% endif %}
+    </section>
+</main>
+<template id="availability-template"><div class="availability-row"><label class="field"><span>Study date</span><input name="availability_date" type="date" min="{{ today }}"></label><label class="field"><span>Available hours</span><input name="availability_hours" type="number" min="0" max="24" step="0.25" placeholder="e.g. 2.5"></label><button class="remove-button" type="button" data-remove>Remove date</button></div></template>
+<script>
+document.getElementById('add-date').addEventListener('click', () => {
+    const row = document.getElementById('availability-template').content.cloneNode(true);
+    document.getElementById('availability').appendChild(row);
+});
+document.getElementById('availability').addEventListener('click', event => {
+    if (event.target.matches('[data-remove]')) event.target.closest('.availability-row').remove();
+});
+document.querySelectorAll('form[data-confirm]').forEach(form => {
+    form.addEventListener('submit', event => {
+        if (!window.confirm(form.dataset.confirm)) event.preventDefault();
+    });
+});
+</script>
+</body>
+</html>
