@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 
 .DS_Store
+study_ai.db
+study_ai.db-*
+.pytest_cache/
+.env

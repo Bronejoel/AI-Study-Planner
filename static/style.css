@@ -13,6 +13,44 @@
     --warning: #ffca66;
 }
 
+/* Persistent workspace and progress controls. */
+a { color: var(--text); text-underline-offset: 4px; }
+nav { display: flex; gap: 20px; flex-wrap: wrap; }
+.page-intro { padding: 20px 0 24px; }
+.page-intro h1 { font-size: clamp(2rem, 5vw, 3.7rem); letter-spacing: -.05em; line-height: 1.05; margin: 0; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+.stats > div { background: var(--surface); padding: 20px; border: 1px solid var(--border); border-radius: 16px; }
+.stats span { display: block; color: var(--muted); margin-bottom: 8px; }
+.stats strong { font-size: 1.6rem; }
+.notice { padding: 16px; background: #172014; border: 1px solid #475a37; border-radius: 12px; }
+.dashboard-error { margin: 0 0 24px; }
+.saved-subject { padding: 24px 0; border-bottom: 1px solid var(--border); }
+.saved-subject:last-child { border-bottom: 0; padding-bottom: 0; }
+progress { width: 100%; height: 10px; accent-color: var(--accent); }
+.duration-pill { background: var(--accent); color: var(--accent-text); border-radius: 99px; padding: 6px 12px; font-size: .9rem; white-space: nowrap; }
+.overdue { color: var(--warning); }
+summary { cursor: pointer; padding: 12px 0; color: var(--muted); }
+summary:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.session-card { border: 1px solid var(--border); border-radius: 16px; padding: 20px; margin-bottom: 14px; background: var(--surface-raised); }
+.session-card form + form { margin-top: 12px; }
+.partial-form { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
+.warning-panel { padding: 20px; border: 1px solid #70521e; border-radius: 14px; margin-top: 20px; }
+section[id] { scroll-margin-top: 24px; }
+#subjects h2, #availability-section h2, #study-plan h2 { font-size: clamp(1.8rem, 3vw, 2.5rem); line-height: 1.2; }
+.section-heading h2 { margin-bottom: 0; }
+.field > span { font-size: .875rem; }
+@media (max-width: 680px) {
+    .stats { grid-template-columns: 1fr; }
+    .header { flex-wrap: wrap; gap: 12px; padding-block: 16px; }
+    nav { gap: 12px; font-size: .9rem; }
+    .partial-form { display: block; }
+    .partial-form button { margin-top: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto !important; }
+    *, *::before, *::after { transition: none !important; }
+}
+
 * {
     box-sizing: border-box;
 }

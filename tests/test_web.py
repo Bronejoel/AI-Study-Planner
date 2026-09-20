@@ -1,140 +1,162 @@
+"""Integration tests use a separate database and real CSRF-protected forms."""
 from datetime import date, timedelta
 
-from index import app, format_duration
+import pytest
+
+import database
+import progress
+from index import create_app, format_duration
 
 
-def valid_form_data(today=None):
-    today = today or date.today()
-    return {
-        "name": ["Math", "Python"],
-        "difficulty": ["5", "3"],
-        "deadline": [
-            (today + timedelta(days=3)).isoformat(),
-            (today + timedelta(days=10)).isoformat(),
-        ],
-        "workload": ["3", "1.5"],
-        "availability_date": [
-            today.isoformat(),
-            (today + timedelta(days=1)).isoformat(),
-        ],
-        "availability_hours": ["1.5", "2"],
-    }
+@pytest.fixture
+def app(tmp_path):
+    return create_app({"TESTING": True, "DATABASE": str(tmp_path / "web.db"), "SECRET_KEY": "test-secret"})
 
 
-def test_home_page_loads_with_phase_two_fields():
+@pytest.fixture
+def client(app):
     client = app.test_client()
+    client.get("/")
+    return client
 
+
+def post(client, path, data=None, follow_redirects=False):
+    with client.session_transaction() as session:
+        tokens = {"csrf_token": session["csrf_token"], "create_token": session["create_token"]}
+    return client.post(path, data={**tokens, **(data or {})}, follow_redirects=follow_redirects)
+
+
+def add(client, **overrides):
+    data = dict(name="Python", difficulty="4", deadline=(date.today() + timedelta(days=4)).isoformat(), workload="3")
+    data.update(overrides)
+    return post(client, "/subjects", data)
+
+
+def make_plan(client):
+    add(client)
+    post(client, "/availability", dict(availability_date=date.today().isoformat(), availability_hours="2"))
+    return post(client, "/plan")
+
+
+def test_home_page_loads_with_saved_workflow(client):
+    page = client.get("/")
+    assert page.status_code == 200
+    for label in (b"StudyAI", b'name="deadline"', b'name="workload"', b"+ Add Date", b"No saved subjects"):
+        assert label in page.data
+
+
+def test_subject_survives_redirect_and_app_restart(client, app):
+    assert add(client).status_code == 303
+    second = create_app({"TESTING": True, "DATABASE": app.config["DATABASE"]}).test_client()
+    assert b"Python" in second.get("/").data
+
+
+def test_invalid_create_preserves_values_without_writing(client, app):
+    response = add(client, name="Keep this name", workload="")
+    assert response.status_code == 400
+    assert b'value="Keep this name"' in response.data
+    assert database.get_subjects(app.config["DATABASE"]) == []
+
+
+def test_create_duplicate_submission_is_not_inserted(client, app):
+    with client.session_transaction() as session:
+        data = dict(csrf_token=session["csrf_token"], create_token=session["create_token"],
+                    name="Python", difficulty=4, deadline=date.today().isoformat(), workload=1)
+    assert client.post("/subjects", data=data).status_code == 303
+    assert client.post("/subjects", data=data).status_code == 409
+    assert len(database.get_subjects(app.config["DATABASE"])) == 1
+
+
+def test_csrf_is_required(client, app):
+    assert client.post("/subjects", data={"name": "Bad"}).status_code == 400
+    assert database.get_subjects(app.config["DATABASE"]) == []
+
+
+def test_valid_form_displays_compact_saved_plan(client, app):
+    assert make_plan(client).status_code == 303
     response = client.get("/")
-
-    assert response.status_code == 200
-    assert b"StudyAI" in response.data
-    assert b'name="deadline"' in response.data
-    assert b'name="workload"' in response.data
-    assert b"+ Add Date" in response.data
+    assert b"2 hr" in response.data
+    assert b"Mark as completed" in response.data
+    assert b"Unscheduled work" in response.data
+    assert database.get_subjects(app.config["DATABASE"])[0]["remaining_minutes"] == 180
 
 
-def test_valid_form_displays_grouped_study_sessions():
-    client = app.test_client()
-
-    response = client.post("/", data=valid_form_data())
-
-    assert response.status_code == 200
-    assert b"Your Study Plan" in response.data
-    assert b"Math" in response.data
-    assert b"1 hr 30 min" in response.data
-    assert b"sessions" not in response.data
-
-
-def test_successful_form_preserves_submitted_values():
-    client = app.test_client()
-
-    response = client.post("/", data=valid_form_data())
-
-    assert response.status_code == 200
-    assert b'value="Math"' in response.data
-    assert b'value="1.5"' in response.data
+def test_complete_undo_and_regenerate(client, app):
+    make_plan(client)
+    path = app.config["DATABASE"]
+    entry = next(iter(progress.dashboard_data(path)["days"].values()))[0]
+    endpoint = f"/sessions/{entry['id']}/progress"
+    assert post(client, endpoint, {"completed_minutes": "30"}).status_code == 303
+    assert post(client, endpoint, {"completed_minutes": "30"}).status_code == 303
+    assert database.get_subjects(path)[0]["remaining_minutes"] == 150
+    assert post(client, "/plan").status_code == 303
+    assert post(client, endpoint, {"completed_minutes": "0"}).status_code == 303
+    assert database.get_subjects(path)[0]["remaining_minutes"] == 180
+    assert post(client, "/plan").status_code == 303
 
 
-def test_invalid_form_preserves_values_and_displays_error():
-    client = app.test_client()
-    today = date.today()
-    data = valid_form_data(today)
-    data["workload"] = ["", "1.5"]
+def test_edit_delete_and_missing_subject(client, app):
+    add(client)
+    sid = database.get_subjects(app.config["DATABASE"])[0]["id"]
+    assert post(client, f"/subjects/{sid}/edit", dict(name="Advanced Python", difficulty="5",
+               deadline=date.today().isoformat(), workload="4")).status_code == 303
+    assert b"Advanced Python" in client.get("/").data
+    assert post(client, f"/subjects/{sid}/delete").status_code == 303
+    assert database.get_subjects(app.config["DATABASE"]) == []
+    assert post(client, f"/subjects/{sid}/delete").status_code == 404
 
-    response = client.post("/", data=data)
 
+def test_invalid_edit_preserves_submitted_values(client):
+    add(client)
+    response = post(client, "/subjects/1/edit", dict(name="My edit", difficulty="9",
+                    deadline=date.today().isoformat(), workload="1"))
     assert response.status_code == 400
-    assert b"Complete all fields for subject 1" in response.data
-    assert b'value="Math"' in response.data
-    assert b"Traceback" not in response.data
+    assert b'value="My edit"' in response.data
 
 
-def test_empty_form_displays_a_friendly_error():
-    client = app.test_client()
-    today = date.today()
+def test_availability_beyond_seven_days_and_blank_rows(client):
+    later = (date.today() + timedelta(days=10)).isoformat()
+    add(client, deadline=later, workload="0.5")
+    response = post(client, "/availability", dict(availability_date=[later, ""], availability_hours=["0.5", ""]))
+    assert response.status_code == 303
+    assert post(client, "/plan").status_code == 303
+    assert b"30 min" in client.get("/").data
 
-    response = client.post(
-        "/",
-        data={
-            "name": "",
-            "difficulty": "",
-            "deadline": "",
-            "workload": "",
-            "availability_date": today.isoformat(),
-            "availability_hours": "0",
-        },
-    )
 
+def test_invalid_availability_preserves_values(client):
+    response = post(client, "/availability", dict(availability_date=[date.today().isoformat(), ""],
+                    availability_hours=["2", "1"]))
     assert response.status_code == 400
-    assert b"Add at least one subject" in response.data
+    assert b'value="2"' in response.data
+    assert b"Choose a study date" in response.data
 
 
-def test_availability_can_extend_beyond_first_seven_days():
-    client = app.test_client()
-    today = date.today()
-    later_date = today + timedelta(days=10)
-
-    response = client.post(
-        "/",
-        data={
-            "name": "Math",
-            "difficulty": "5",
-            "deadline": later_date.isoformat(),
-            "workload": "0.5",
-            "availability_date": later_date.isoformat(),
-            "availability_hours": "0.5",
-        },
-    )
-
-    assert response.status_code == 200
-    assert later_date.strftime("%A, %d %B %Y").encode() in response.data
-    assert b"30 min" in response.data
+def test_generate_requires_subjects_and_availability(client):
+    assert post(client, "/plan").status_code == 400
+    add(client)
+    assert post(client, "/plan").status_code == 400
 
 
-def test_duration_is_displayed_compactly():
-    assert format_duration(0) == "0 min"
-    assert format_duration(15) == "15 min"
-    assert format_duration(60) == "1 hr"
-    assert format_duration(75) == "1 hr 15 min"
-    assert format_duration(330) == "5 hr 30 min"
+def test_invalid_completion_and_unknown_session(client):
+    make_plan(client)
+    assert post(client, "/sessions/1/progress", {"completed_minutes": "many"}).status_code == 400
+    assert post(client, "/sessions/1/progress", {"completed_minutes": "999"}).status_code == 400
+    assert post(client, "/sessions/999/progress", {"completed_minutes": "0"}).status_code == 404
 
 
-def test_unfinished_work_warning_is_displayed():
-    client = app.test_client()
-    today = date.today()
+def test_html_names_are_escaped(client):
+    add(client, name="<script>alert(1)</script>")
+    page = client.get("/").data
+    assert b"<script>alert(1)</script>" not in page
+    assert b"&lt;script&gt;" in page
 
-    response = client.post(
-        "/",
-        data={
-            "name": "Math",
-            "difficulty": "5",
-            "deadline": (today + timedelta(days=3)).isoformat(),
-            "workload": "5",
-            "availability_date": today.isoformat(),
-            "availability_hours": "0.5",
-        },
-    )
 
-    assert response.status_code == 200
-    assert b"Unfinished Work" in response.data
-    assert b"270 minutes remaining" in response.data
+def test_state_changes_require_post(client):
+    assert client.get("/subjects/1/delete").status_code == 405
+    assert client.get("/plan").status_code == 405
+
+
+@pytest.mark.parametrize("minutes, expected", [(0, "0 min"), (15, "15 min"), (60, "1 hr"),
+                                           (75, "1 hr 15 min"), (330, "5 hr 30 min")])
+def test_duration_is_displayed_compactly(minutes, expected):
+    assert format_duration(minutes) == expected
